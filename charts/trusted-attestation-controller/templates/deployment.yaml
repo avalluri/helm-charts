@@ -1,0 +1,148 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    control-plane: controller-manager
+  name: tac-app
+  namespace: {{ .Values.nameSpace }}
+spec:
+  replicas: {{ .Values.deployment.replicaCount }}
+  selector:
+    matchLabels:
+      control-plane: controller-manager
+  template:
+    metadata:
+      labels:
+        control-plane: controller-manager
+    spec:
+      containers:
+      - args:
+        - --leader-elect
+        - --registration-path=/registration/controller.sock
+        {{- if eq .Values.pluginToUse "kmra-plugin" }}
+          {{- with .Values.kmraPlugin.pluginNameArg }}
+            {{- toYaml . | nindent 8 }}
+          {{- end }}
+        {{- else if eq .Values.pluginToUse "isecl-plugin" }}
+          {{- with .Values.iseclPlugin.pluginNameArg }}
+            {{- toYaml . | nindent 8 }}
+          {{- end }}
+        {{- end }}
+        command:
+        - /manager
+        image: "{{ .Values.image.hub }}/{{ .Values.image.name }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.deployment.pullPolicy }}
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: {{ .Values.deployment.port }}
+          initialDelaySeconds: {{ .Values.deployment.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.deployment.livenessProbe.periodSeconds }}
+        name: manager
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: {{ .Values.deployment.port }}
+          initialDelaySeconds: {{ .Values.deployment.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.deployment.readinessProbe.initialDelaySeconds }}
+        resources:
+          limits:
+            cpu: {{ .Values.deployment.limits.cpu }}
+            memory: {{ .Values.deployment.limits.memory }}
+          requests:
+            cpu: {{ .Values.deployment.requests.cpu }}
+            memory: {{ .Values.deployment.requests.memory }}
+        securityContext:
+          allowPrivilegeEscalation: false
+        {{- with .Values.volumeMounts }}
+        volumeMounts:
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+      - args:
+        {{- if eq .Values.pluginToUse "kmra-plugin" }}
+          {{- with .Values.kmraPlugin.args }}
+            {{- toYaml . | nindent 8 }}
+          {{- end }}
+        {{- else if eq .Values.pluginToUse "isecl-plugin" }}
+          {{- with .Values.iseclPlugin.args }}
+            {{- toYaml . | nindent 8 }}
+          {{- end }}
+        {{- else }}
+          {{- with .Values.nullPlugin.args }}
+            {{- toYaml . | nindent 8 }}
+          {{- end }}
+        {{- end }}
+        - --registry-socket-path=/registration/controller.sock
+        command:
+        {{- if eq .Values.pluginToUse "kmra-plugin" }}
+          {{- with .Values.kmraPlugin.command }}
+            {{- toYaml . | nindent 8 }}
+          {{- end }}
+        {{- else if eq .Values.pluginToUse "isecl-plugin" }}
+          {{- with .Values.iseclPlugin.command }}
+            {{- toYaml . | nindent 8 }}
+          {{- end }}
+        {{- else }}
+          {{- with .Values.nullPlugin.command }}
+            {{- toYaml . | nindent 8 }}
+          {{- end }}
+        {{- end }}
+        {{- if eq .Values.pluginToUse "kmra-plugin" }}
+        envFrom:
+        - configMapRef:
+            name: {{ .Values.kmraPlugin.configMap.name }}
+        {{- end }}
+        image: "{{ .Values.image.hub }}/{{ .Values.image.name }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        {{- if eq .Values.pluginToUse "kmra-plugin" }}
+        name: {{ .Values.kmraPlugin.name }}
+        {{- else if eq .Values.pluginToUse "isecl-plugin" }}
+        name: {{ .Values.iseclPlugin.name }}
+        {{- else }}
+        name: {{ .Values.nullPlugin.name }}
+        {{- end }}
+        resources:
+          limits:
+            cpu: {{ .Values.pluginResources.limits.cpu }}
+            memory: {{ .Values.pluginResources.limits.memory }}
+          requests:
+            cpu: {{ .Values.pluginResources.requests.cpu }}
+            memory: {{ .Values.pluginResources.requests.memory }}
+        {{- with .Values.volumeMounts }}
+        volumeMounts:
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if eq .Values.pluginToUse "kmra-plugin" }}
+          {{- with .Values.kmraPlugin.volumeMounts }}
+            {{- toYaml . | nindent 8 }}
+          {{- end }}
+        {{- else if eq .Values.pluginToUse "isecl-plugin" }}
+          {{- with .Values.iseclPlugin.volumeMounts }}
+            {{- toYaml . | nindent 8 }}
+          {{- end }}
+        {{- end }}
+      initContainers:
+      - command:
+        - sh
+        - -c
+        - set -x; chown -R 5000:5000 /registration /plugins
+        image: busybox
+        name: decode-secrets
+        {{- with .Values.volumeMounts }}
+        volumeMounts:
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+      serviceAccountName: tac-svcact
+      terminationGracePeriodSeconds: 10
+      {{- with .Values.volumes }}
+      volumes:
+        {{- toYaml . | nindent 6 }}
+      {{- end }}
+      {{- if eq .Values.pluginToUse "kmra-plugin" }}
+        {{- with .Values.kmraPlugin.volumes }}
+          {{- toYaml . | nindent 6 }}
+        {{- end }}
+      {{- else if eq .Values.pluginToUse "isecl-plugin" }}
+        {{- with .Values.iseclPlugin.volumes }}
+          {{- toYaml . | nindent 6 }}
+        {{- end }}
+      {{- end }}
