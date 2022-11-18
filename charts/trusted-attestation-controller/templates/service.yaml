@@ -3,12 +3,12 @@ kind: Service
 metadata:
   labels:
     control-plane: controller-manager
-  name: {{ .Values.service.name }}
-  namespace: {{ .Values.nameSpace }}
+  name: tac-metrics-service
+  namespace: {{ .Release.namespace }}
 spec:
   ports:
   - name: https
-    port: {{ .Values.service.port }}
-    targetPort: {{ .Values.service.targetPort }}
+    port: {{ .Values.metricsPort }}
+    targetPort: https
   selector:
     control-plane: controller-manager

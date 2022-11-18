@@ -1,31 +1,27 @@
-nameSpace: attestation-controller
+# Name of the plugin to deploy, one of : "null", "kmra", "isecl".
+# This must be selected on chart installation
+plugin: ""
 
-# Name of the plugin configuration you want to use
-# [null, kmra, isecl] leave empty to default to the null-plugin
-pluginToUse: kmra-plugin
+serviceAccountName: tac-svcact
+metricsPort: 8443
+replicas: 1
 
-
+# This is the default image used by all the containers (controller and plugins).
+# Could be overwritten by providing container specific 'image' section.
 image:
-  hub: intel
-  name: trusted-attestation-controller
+  hub: docker.io
+  name: intel/trusted-attestation-controller
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "latest"
+  tag:
 
+# controller/manager container configuration
+controller:
+  # default to .image
+  image:
+    hub:
 
-secrets:
-  caCrt:
-  clientCrt:
-  clientKey:
-
-
-deployment:
-  replicaCount: 1
-
-  pullPolicy: Always
-
-  port: 8081
-
+  healthProbePort: 8081
   livenessProbe:
     initialDelaySeconds: 15
     periodSeconds: 20
@@ -36,45 +32,12 @@ deployment:
   limits:
     cpu: 200m
     memory: 100Mi
-
   requests:
     cpu: 100m
     memory: 20Mi
 
-
-service:
-  name: tac-metrics-service
-
-  port: 8443
-  targetPort: https
-
-serviceAccount:
-  name: tac-svcact
-
-
-volumes:
-  - emptyDir: {}
-    name: plugin-socket-dir
-  - emptyDir: {}
-    name: registry-socket-dir
-
-volumeMounts:
-  - name: plugin-socket-dir
-    mountPath: /plugins
-  - name: registry-socket-dir
-    mountPath: /registration
-
-
-pluginResources: # Resources used by the plugins
-  limits:
-    cpu: 500m
-    memory: 100Mi
-  requests:
-    cpu: 100m
-    memory: 20Mi
-
-
-nullPlugin: # Configuration for null-plugin
+# Configuration for null-plugin
+nullPlugin:
   name: null-plugin
 
   args:
@@ -82,21 +45,22 @@ nullPlugin: # Configuration for null-plugin
     - --plugin-socket-path=/plugins/null.sock
 
   command:
-    - /null-plugin
-
-  configMap:
-    name: null-config
-    config:
-      KEY_SERVER: ""
+  - /null-plugin
   
-  secretName: null-secrets
+  # defaults to .image
+  image:
+    hub:
 
+  limits:
+    cpu: 500m
+    memory: 100Mi
+  requests:
+    cpu: 100m
+    memory: 20Mi
 
-kmraPlugin: # Configuration for kmra-plugin
+# Configuration for kmra-plugin
+kmraPlugin:
   name: kmra-plugin
-
-  pluginNameArg:
-    - --plugin-name=kmra
 
   args:
     - --plugin-name=kmra
@@ -105,29 +69,28 @@ kmraPlugin: # Configuration for kmra-plugin
   command:
     - /kmra-plugin
 
-  configMap:
-    name: kmra-config
-    config:
-      KEY_SERVER: ""
+  # defaults to .image
+  image:
+    hub:
 
-  secretName: kmra-secrets
+  limits:
+    cpu: 500m
+    memory: 100Mi
+  requests:
+    cpu: 100m
+    memory: 20Mi
 
-  volumes:
-    - name: kmra-secrets
-      secret:
-        secretName: kmra-secrets
-  
-  volumeMounts:
-    - name: kmra-secrets
-      mountPath: /certs/
-      readOnly: true
+  # KMRA server configuration must be set on chat installation
+  server:
+    url: ""
+    tls:
+      caCrt: ""
+      clientCrt: ""
+      clientKey: ""
 
-
-iseclPlugin: # Configuration for isecl-plugin
+# Configuration for isecl-plugin
+iseclPlugin:
   name: isecl-plugin
-
-  pluginNameArg:
-    - --plugin-name=isecl
   
   args:
     - --plugin-name=isecl
@@ -135,64 +98,41 @@ iseclPlugin: # Configuration for isecl-plugin
   
   command:
     - /isecl-plugin
+
+  # defaults to .image
+  image:
+    hub:
+
+  limits:
+    cpu: 500m
+    memory: 100Mi
+  requests:
+    cpu: 100m
+    memory: 20Mi
   
-  configMap:
-    name: tac-config
-  
-  secretName: kbs-secrets
-
-  volumes:
-    - name: tac-config
-      configMap:
-        name: tac-config
-    - name: kmip-secrets
-      secret:
-        secretName: kmip-secrets
-    - name: kmip-secrets
-      secret:
-        secretName: kmip-secrets
-
-  volumeMounts:
-    - name: tac-config
-      mountPath: /etc/tac
-    - name: kmip-secrets
-      mountPath: /etc/tac/kmip-certs
-      readOnly: true
-    - name: kbs-secrets
-      mountPath: /etc/tac/kbs-certs
-      readOnly: true
-
-  configFromYaml:
-    #
-    # iSecL plugin client configuration in YAML format
-    #
-    kbs:
-      # KBS server hostname/ip-address
-      host:
-      # Client Certificate and Privatekey paths
-      # Make sure that the KBS client secrets are mounted
-      # at this path: /etc/tac/kbs-certs
-      caCert: "/etc/tac/kbs-certs/ca.crt"
-      clientKey: "/etc/tac/kbs-certs/client.key"
-      clientCert: "/etc/tac/kbs-certs/client.crt"
-      # Bearer token to access KBS API
-      token:
-    # SGX Quote Verification Service
-    sqvs:
-      host:
-    kmip:
-      # Server IP address
+  kbs:
+    # KBS server hostname/ip-address
+    host: localhost
+    port: 9443
+    tls:
+      caCert: # base64-encoded CA certificate
+      clientKey: # base64-encoded client key
+      clientCert: # base64-encoded client certificate
+    token: # Bearer token to access KBS API
+  # SGX Quote Verification Service
+  sqvs:
+    host:
+    port: 9447
+  # KMIP server configuration
+  kmip:
       ip:
-      # Server hostname
-      hostname:
-      # Server port number defaults to 5696
-      port:
+      hostname: localhost
+      port: 5696
       # base64 encoded username and password to access the server
       username: ""
       password: ""
-      # Client Certificate and Privatekey paths
-      # Make sure that the KMIP client secrets are mounted
-      # at this path: /etc/tac/kmip-certs
-      caCert: "/etc/tac/kmip-certs/ca.crt"
-      clientKey: "/etc/tac/kmip-certs/client.key"
-      clientCert: "/etc/tac/kmip-certs/client.crt"
+      # tls configuration
+      tls:
+        caCert: # base64-encoded CA certificate
+        clientKey: # base64-encoded client key
+        clientCert: # base64-encoded client certificate
